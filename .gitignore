@@ -210,3 +210,21 @@ __marimo__/
 
 # mac 
 *.DS_Store
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data files (raw datasets)
+data/*.csv
+data/*.parquet
+data/*.xlsx
+
+# OS / IDE
+.DS_Store
+.vscode/

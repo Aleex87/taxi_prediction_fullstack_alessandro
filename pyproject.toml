@@ -7,7 +7,10 @@ authors = [
     { name = "Aleex87", email = "alessandrodanteabbate@gmail.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "pandas>=2.3.3",
+    "pydantic>=2.12.5",
+]
 
 [project.scripts]
 taxipred = "taxipred:main"
