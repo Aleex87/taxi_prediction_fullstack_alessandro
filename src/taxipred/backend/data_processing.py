@@ -4,10 +4,10 @@ import json
 from pprint import pprint
 from pydantic import BaseModel, Field
 
-def load_cvs(filename: str) -> pd.DataFrame:
+def load_csv(filename: str) -> pd.DataFrame:
 
 
-    return pd.read_cvs(DATA_PATH /filename)
+    return pd.read_csv(DATA_PATH /filename)
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
