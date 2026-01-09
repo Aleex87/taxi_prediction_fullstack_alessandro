@@ -18,7 +18,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    df = load_cvs("taxi_trip_pricing.csv")
+    df = load_csv("taxi_trip_pricing.csv")
     df = clean_data(df)
     print(df.head())
 
