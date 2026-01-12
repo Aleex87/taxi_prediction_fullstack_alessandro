@@ -9,6 +9,7 @@ def load_csv(filename: str) -> pd.DataFrame:
 
     return pd.read_csv(DATA_PATH /filename)
 
+
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
