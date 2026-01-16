@@ -129,7 +129,7 @@ class PredictResponse(BaseModel):
 
 # endpoint:
 
-@app.get("/home")
+@app.get("/check")
 def works_check():
     return {"satus": "ok"}
 
