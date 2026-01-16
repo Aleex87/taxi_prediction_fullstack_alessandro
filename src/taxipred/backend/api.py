@@ -1,4 +1,4 @@
-from fastapi import FastApi
+from fastapi import FastAPI , HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -8,7 +8,7 @@ import pandas as pd
 import joblib
 import httpx
 
-app = FastApi(title=" Taxi Price Prediction API")
+app = FastAPI(title=" Taxi Price Prediction API")
 
 # ----------- Load model once at the start of the app ---------
 
@@ -17,7 +17,7 @@ model = joblib.load(MODEL_FILE)
 
 
 # ----------- Timezone in Sweden  ---------
-TZ = ZoneInfo("Europe/Sewden")
+TZ = ZoneInfo("Europe/Stockholm")
 
 # ----------- Function Geocoding   ---------
 # Out source !!!
@@ -56,14 +56,14 @@ async def osrm_route_metrics(start_lat: float, start_lon: float, end_lat: float,
         
         route = data["routes"][0]
         distance_km = route["distance"] / 1000.0
-        duration_min = route["distance"] / 60.0
+        duration_min = route["duration"] / 60.0
         
         return distance_km, duration_min
 
 
 # ----------- Define time/days/traffic   ---------
 
-def time_features(now: datetime) -> dict:
+def now_time_features(now: datetime) -> dict:
     hour = now.hour
     weekday = now.weekday()
     is_weekend = 1 if weekday >= 5 else 0
@@ -81,23 +81,23 @@ def time_features(now: datetime) -> dict:
     
     # Defining -> Traffic condition 
 
-    traffic = {"Treffic_Condition_Low": 0, "Traffic_Condition_Medium": 0}
+    traffic = {"Traffic_Conditions_Low": 0, "Traffic_Conditions_Medium": 0}
 
     # Assume generally lower traffic in the weekend
     if is_weekend:
         if 12 <= hour <= 18:
-            traffic["Traffic_Condition_Medium"] = 1 
+            traffic["Traffic_Conditions_Medium"] = 1 
         else: 
-            traffic["Treffic_Condition_Low"] = 1
+            traffic["Traffic_Conditions_Low"] = 1
     else:
         # weekday
-        if 7<= hour 9 or 16 <= hour <= 18:
+        if 7<= hour <= 9 or 16 <= hour <= 18:
             # high traffic
             pass
         elif 11 <= hour <= 13: 
-            traffic["Traffic_Condition_Medium"] = 1
+            traffic["Traffic_Conditions_Medium"] = 1
         else:
-            traffic["Treffic_Condition_Low"] = 1
+            traffic["Traffic_Conditions_Low"] = 1
     
     return{
         "Day_of_Week_Weekend": is_weekend,
@@ -110,14 +110,87 @@ def time_features(now: datetime) -> dict:
 # User will select:
 WeatherType = Literal["Clear", "Rain", "Snow"]
 
+# validation with pydantic:
 
+class PredictRequest(BaseModel):
+    pickup_address: str = Field(..., min_length=3)
+    dropoff_address: str = Field(..., min_length=3)
+    weather : WeatherType = "Clear"
+    passenger_count : int = Field(1, ge= 1, le=8)
 
+class PredictResponse(BaseModel):
+    predicted_price: float
+    distance_km : float
+    duration_min : float
+    pickup_lat : float
+    pickup_lon : float
+    dropoff_lat : float
+    dropoff_lon : float
 
+# endpoint:
 
+@app.get("/home")
+def works_check():
+    return {"satus": "ok"}
 
-# print(MODELS_PATH)
-# print((MODELS_PATH / "random_forest_model.joblib").exists())
+@app.post("/predict", response_model=PredictResponse)
+async def predict_price(request: PredictRequest) -> PredictResponse:
+    
+    # Geocode
+    
+    pickup_lat, pickup_lon = await geocode_address(request.pickup_address) 
+    dropoff_lat, dropoff_lon = await geocode_address(request.dropoff_address)
+    
+    # Rout from OSRM
 
-# print(DATA_PATH)
-# print((DATA_PATH / "taxi_trip_pricing.csv").exists())
+    distance_km , duration_min = await osrm_route_metrics(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+    
+    # Time 
+
+    now = datetime.now(TZ)
+    time_features = now_time_features(now)
+
+    # Weather (Clear is the base)
+    weather_features = {"Weather_Rain": 0 , "Weather_Snow": 0}
+    if request.weather == "Rain":
+        weather_features["Weather_Rain"] = 1 
+    elif request.weather == " Snow":
+        weather_features["Weather_Snow"] = 1
+    
+    # Rates
+
+    base_fare = 3.0
+    per_km_rate = 1.2
+    per_minute_rate = 0.3
+
+    # Imput 
+
+    model_input = {
+        "Trip_Distance_Km" : distance_km,
+        "Passenger_Count" : float(request.passenger_count),
+        "Base_Fare" : base_fare,
+        "Per_Km_Rate" : per_km_rate,
+        "Per_Minute_Rate" : per_minute_rate,
+        "Trip_Duration_Minutes" : duration_min,
+        **time_features,
+        **weather_features,
+
+    }
+
+    input_df = pd.DataFrame([model_input])
+    input_df = input_df.reindex(columns=model.feature_names_in_, fill_value=0)
+
+    # predict
+    pred = model.predict(input_df)[0]
+
+    return PredictResponse(
+        predicted_price=round(float(pred),2),
+        distance_km=round(float(distance_km), 2),
+        duration_min=round(float(duration_min), 1),
+        pickup_lat=float(pickup_lat),
+        pickup_lon=float(pickup_lon),
+        dropoff_lat=float(dropoff_lat),
+        dropoff_lon=float(dropoff_lon),
+    )
+
 
