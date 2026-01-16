@@ -29,7 +29,7 @@ Some features are automatically derived at request time:
 - `Traffic_Conditions` is estimated using simple time-based rules (e.g., morning and evening rush hours).
 
 ### Route distance and duration
-`Trip_Distance_km` and `Trip_Duration_Minutes` are computed from Point A and Point B using a routing service (OSRM with Encoding).
+`Trip_Distance_km` and `Trip_Duration_Minutes` are computed from Point A and Point B using a routing service (OSRM with Geocoding).
 This avoids asking the user to manually enter distance and duration and enables a more realistic end-to-end prediction flow.
 
 ### Notes
