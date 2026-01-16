@@ -42,9 +42,11 @@ async def geocode_address(address: str) -> tuple[float, float]:
         lon = float(data[0]["lon"])
         return lat, lon 
 
-async def osrm_route_metrics(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> tuple[float, float]:
+async def osrm_route_metrics(
+    start_lat: float, start_lon: float, end_lat: float, end_lon: float
+    ) -> tuple[float, float, list[list[float]]]:
         url = f"https://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
-        params = {"overview": "false"}
+        params = {"overview": "full", "geometries": "geojson"}
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url, params=params)
@@ -57,8 +59,11 @@ async def osrm_route_metrics(start_lat: float, start_lon: float, end_lat: float,
         route = data["routes"][0]
         distance_km = route["distance"] / 1000.0
         duration_min = route["duration"] / 60.0
+
+        coords_lonlat = route["geometry"]["coordinates"]
+        route_latlon = [[lat,lon] for lon , lat in coords_lonlat]
         
-        return distance_km, duration_min
+        return distance_km, duration_min, route_latlon
 
 
 # ----------- Define time/days/traffic   ---------
@@ -126,12 +131,14 @@ class PredictResponse(BaseModel):
     pickup_lon : float
     dropoff_lat : float
     dropoff_lon : float
+    route : list[list[float]]
 
 # endpoint:
 
 @app.get("/check")
 def works_check():
     return {"satus": "ok"}
+
 
 @app.post("/predict", response_model=PredictResponse)
 async def predict_price(request: PredictRequest) -> PredictResponse:
@@ -143,8 +150,11 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
     
     # Rout from OSRM
 
-    distance_km , duration_min = await osrm_route_metrics(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
-    
+    distance_km, duration_min, route_latlon = await osrm_route_metrics(
+    pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+)
+
+
     # Time 
 
     now = datetime.now(TZ)
@@ -166,7 +176,7 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
     # Imput 
 
     model_input = {
-        "Trip_Distance_Km" : distance_km,
+        "Trip_Distance_km" : distance_km,
         "Passenger_Count" : float(request.passenger_count),
         "Base_Fare" : base_fare,
         "Per_Km_Rate" : per_km_rate,
@@ -176,6 +186,8 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
         **weather_features,
 
     }
+
+  
 
     input_df = pd.DataFrame([model_input])
     input_df = input_df.reindex(columns=model.feature_names_in_, fill_value=0)
@@ -191,6 +203,8 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
         pickup_lon=float(pickup_lon),
         dropoff_lat=float(dropoff_lat),
         dropoff_lon=float(dropoff_lon),
+        route=route_latlon
+        
     )
 
 

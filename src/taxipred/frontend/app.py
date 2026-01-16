@@ -65,6 +65,11 @@ with st.form("predict_form"):
                 tooltip="Drop-off (B)",
             ).add_to(taxi_map)
 
+            folium.PolyLine(
+            locations=result["route"],
+            weight=5
+            ).add_to(taxi_map)
+            
             st.subheader("Map")
             st_folium(taxi_map, width=700, height=450)
         
