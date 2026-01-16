@@ -183,7 +183,7 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
     weather_features = {"Weather_Rain": 0 , "Weather_Snow": 0}
     if request.weather == "Rain":
         weather_features["Weather_Rain"] = 1 
-    elif request.weather == " Snow":
+    elif request.weather == "Snow":
         weather_features["Weather_Snow"] = 1
     
     # Rates
