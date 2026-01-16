@@ -15,6 +15,25 @@ app = FastAPI(title=" Taxi Price Prediction API")
 MODEL_FILE = MODELS_PATH / "random_forest_model.joblib"
 model = joblib.load(MODEL_FILE)
 
+# all the columns
+
+FEATURE_COLUMNS = [
+    "Trip_Distance_km",
+    "Passenger_Count",
+    "Base_Fare",
+    "Per_Km_Rate",
+    "Per_Minute_Rate",
+    "Trip_Duration_Minutes",
+    "Time_of_Day_Evening",
+    "Time_of_Day_Morning",
+    "Time_of_Day_Night",
+    "Day_of_Week_Weekend",
+    "Traffic_Conditions_Low",
+    "Traffic_Conditions_Medium",
+    "Weather_Rain",
+    "Weather_Snow",
+]
+
 
 # ----------- Timezone in Sweden  ---------
 TZ = ZoneInfo("Europe/Stockholm")
@@ -187,10 +206,8 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
 
     }
 
-  
-
     input_df = pd.DataFrame([model_input])
-    input_df = input_df.reindex(columns=model.feature_names_in_, fill_value=0)
+    input_df = input_df.reindex(columns=FEATURE_COLUMNS, fill_value=0.0)
 
     # predict
     pred = model.predict(input_df)[0]
