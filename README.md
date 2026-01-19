@@ -52,6 +52,10 @@ In the cleaned dataset, the number of observations for each category is not bala
 Additionally, in this dataset the mean/median `Trip_Price` for `Snow` is slightly lower than for `Clear` and `Rain`.
 For this reason, the model may predict similar or slightly lower prices under `Snow`, which reflects the patterns in the dataset rather than a real-world pricing rule.
 
+### Currency
+The model target (`Trip_Price`) is treated as USD. The API converts the predicted price to SEK using a fixed exchange rate
+defined in `constants.py` to keep the demo stable and avoid external dependencies.
+
 ## Run `code`
 
 - backend

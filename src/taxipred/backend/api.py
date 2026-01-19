@@ -1,150 +1,32 @@
-from fastapi import FastAPI , HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Literal
-from taxipred.utils.constants import MODELS_PATH, DATA_PATH
+from taxipred.utils.constants import MODELS_PATH, FEATURE_COLUMNS, USD_TO_SEK, CURRENCY
+from taxipred.backend.services.routing import geocode_address, osrm_route_metrics
+from taxipred.backend.services.features import now_time_features
+
+
 import pandas as pd
 import joblib
 import httpx
 
 app = FastAPI(title=" Taxi Price Prediction API")
 
+# ----------- Timezone in Sweden  ---------
+TZ = ZoneInfo("Europe/Stockholm")
+
 # ----------- Load model once at the start of the app ---------
 
 MODEL_FILE = MODELS_PATH / "random_forest_model.joblib"
 model = joblib.load(MODEL_FILE)
 
-# all the columns
-
-FEATURE_COLUMNS = [
-    "Trip_Distance_km",
-    "Passenger_Count",
-    "Base_Fare",
-    "Per_Km_Rate",
-    "Per_Minute_Rate",
-    "Trip_Duration_Minutes",
-    "Time_of_Day_Evening",
-    "Time_of_Day_Morning",
-    "Time_of_Day_Night",
-    "Day_of_Week_Weekend",
-    "Traffic_Conditions_Low",
-    "Traffic_Conditions_Medium",
-    "Weather_Rain",
-    "Weather_Snow",
-]
-
-
-# ----------- Timezone in Sweden  ---------
-TZ = ZoneInfo("Europe/Stockholm")
-
-# ----------- Function Geocoding   ---------
-# Out source !!!
-
-async def geocode_address(address: str) -> tuple[float, float]:
-
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {"q" : address, "format": "json", "limit": 1}
-
-    headers = {"User-Agent": "taxipred-student-project"}
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        
-        response = await client.get(url, params=params, headers=headers)
-        response.raise_for_status() # trow an error if status != 2xx
-        data = response.json()  # convert in list/dict
-
-        if not data:
-            raise HTTPException(status_code=400, detail=f"Address not found: {address}")
-        
-        lat = float(data[0]["lat"])
-        lon = float(data[0]["lon"])
-        return lat, lon 
-
-async def osrm_route_metrics(
-    start_lat: float, start_lon: float, end_lat: float, end_lon: float
-    ) -> tuple[float, float, list[list[float]]]:
-        url = f"https://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
-        params = {"overview": "full", "geometries": "geojson"}
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-
-        if data.get("code") != "Ok" or not data.get("routes"):
-            raise HTTPException(status_code=400, detail="Routing failed with OSRM.")
-        # convert from mt in km and from sec in min 
-        route = data["routes"][0]
-        distance_km = route["distance"] / 1000.0
-        duration_min = route["duration"] / 60.0
-        # convert in [lat, lon] 
-        coords_lonlat = route["geometry"]["coordinates"]
-
-        # list comparehension
-        # new_list 0 [expretion for item in iterable]
-        route_latlon = [[lat,lon] for lon , lat in coords_lonlat]           
-        # is like 
-        # route_latlon = []
-        # for pair in coords_lonlat:
-        #   lon = pair[0]
-        #   lat = pair[1]
-        #   route_latlon.append([lat, lon])
-
-        return distance_km, duration_min, route_latlon
-
-
-# ----------- Define time/days/traffic   ---------
-
-def now_time_features(now: datetime) -> dict:
-    hour = now.hour
-    weekday = now.weekday()
-    is_weekend = 1 if weekday >= 5 else 0
-
-# Dfining -> Morning: 05-11, Afternoon is baseline (drop_first), Evening: 17-21, Night: 22-04
-    time_of_day = {"Time_of_Day_Morning": 0, "Time_of_Day_Evening": 0, "Time_of_Day_Night": 0}
-
-    # aftenoon will be the zeros
-    if 5 <= hour <= 11:
-        time_of_day["Time_of_Day_Morning"] = 1
-    elif 17 <= hour <= 21:
-        time_of_day["Time_of_Day_Evening"] = 1
-    elif hour >= 22 or hour <= 4:
-        time_of_day["Time_of_Day_Night"] = 1
-    
-    # Defining -> Traffic condition baseline will be high
-
-    traffic = {"Traffic_Conditions_Low": 0, "Traffic_Conditions_Medium": 0}
-
-    # Assume generally lower traffic in the weekend
-    if is_weekend:
-        if 12 <= hour <= 18:
-            traffic["Traffic_Conditions_Medium"] = 1 
-        else: 
-            traffic["Traffic_Conditions_Low"] = 1
-    else:
-        # weekday
-        if 7<= hour <= 9 or 16 <= hour <= 18:
-            # high traffic
-            pass
-        elif 11 <= hour <= 13: 
-            traffic["Traffic_Conditions_Medium"] = 1
-        else:
-            traffic["Traffic_Conditions_Low"] = 1
-    
-    return{
-        "Day_of_Week_Weekend": is_weekend,
-        **time_of_day,
-        **traffic,
-        # build a singol dict with all the feature
-    }
-
-
-# ----------- API   ---------
-# User will select:
+  
+# Lock with Literal so the User can select:
 WeatherType = Literal["Clear", "Rain", "Snow"]
 
-# validation with pydantic:
+# Validation with pydantic:
 
 class PredictRequest(BaseModel):
     pickup_address: str = Field(..., min_length=3)
@@ -153,14 +35,16 @@ class PredictRequest(BaseModel):
     passenger_count : int = Field(1, ge= 1, le=8)
 
 class PredictResponse(BaseModel):
-    predicted_price: float
-    distance_km : float
-    duration_min : float
-    pickup_lat : float
-    pickup_lon : float
-    dropoff_lat : float
-    dropoff_lon : float
-    route : list[list[float]]
+    predicted_price_sek: float
+    predicted_price_usd: float
+    currency: str
+    distance_km: float
+    duration_min: float
+    pickup_lat: float
+    pickup_lon: float
+    dropoff_lat: float
+    dropoff_lon: float
+    route: list[list[float]]
 
 # endpoint:
 
@@ -201,8 +85,9 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
     # Base_Fare, Per_Km_Rate, and Per_Minute_Rate.
     # In a real taxi system, these rates may vary by provider, city, time, or policy.
     # Since the user cannot know the exact tariff rates at request time, we set fixed
+    # These values come from the median values computed in model_dev.ipynb.
 
-    base_fare = 3.0
+    base_fare = 3.5
     per_km_rate = 1.2
     per_minute_rate = 0.3
 
@@ -222,21 +107,24 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
 
     input_df = pd.DataFrame([model_input])
     input_df = input_df.reindex(columns=FEATURE_COLUMNS, fill_value=0.0) 
-    
 
-    # predict
-    pred = model.predict(input_df)[0]
+    # ---------------- Predict ----------------
+
+    pred_usd = float(model.predict(input_df)[0])
+    pred_sek = pred_usd * USD_TO_SEK
 
     return PredictResponse(
-        predicted_price=round(float(pred),2),
+        predicted_price_sek=round(pred_sek, 2),
+        predicted_price_usd=round(pred_usd, 2),
+        currency=CURRENCY,
         distance_km=round(float(distance_km), 2),
         duration_min=round(float(duration_min), 1),
         pickup_lat=float(pickup_lat),
         pickup_lon=float(pickup_lon),
         dropoff_lat=float(dropoff_lat),
         dropoff_lon=float(dropoff_lon),
-        route=route_latlon
-        
+        route=route_latlon,
     )
+
 
 
