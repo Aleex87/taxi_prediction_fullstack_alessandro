@@ -51,8 +51,8 @@ async def geocode_address(address: str) -> tuple[float, float]:
     async with httpx.AsyncClient(timeout=10.0) as client:
         
         response = await client.get(url, params=params, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+        response.raise_for_status() # trow an error if status != 2xx
+        data = response.json()  # convert in list/dict
 
         if not data:
             raise HTTPException(status_code=400, detail=f"Address not found: {address}")
@@ -74,14 +74,23 @@ async def osrm_route_metrics(
 
         if data.get("code") != "Ok" or not data.get("routes"):
             raise HTTPException(status_code=400, detail="Routing failed with OSRM.")
-        
+        # convert from mt in km and from sec in min 
         route = data["routes"][0]
         distance_km = route["distance"] / 1000.0
         duration_min = route["duration"] / 60.0
-
+        # convert in [lat, lon] 
         coords_lonlat = route["geometry"]["coordinates"]
-        route_latlon = [[lat,lon] for lon , lat in coords_lonlat]
-        
+
+        # list comparehension
+        # new_list 0 [expretion for item in iterable]
+        route_latlon = [[lat,lon] for lon , lat in coords_lonlat]           
+        # is like 
+        # route_latlon = []
+        # for pair in coords_lonlat:
+        #   lon = pair[0]
+        #   lat = pair[1]
+        #   route_latlon.append([lat, lon])
+
         return distance_km, duration_min, route_latlon
 
 
@@ -103,7 +112,7 @@ def now_time_features(now: datetime) -> dict:
     elif hour >= 22 or hour <= 4:
         time_of_day["Time_of_Day_Night"] = 1
     
-    # Defining -> Traffic condition 
+    # Defining -> Traffic condition baseline will be high
 
     traffic = {"Traffic_Conditions_Low": 0, "Traffic_Conditions_Medium": 0}
 
@@ -127,6 +136,7 @@ def now_time_features(now: datetime) -> dict:
         "Day_of_Week_Weekend": is_weekend,
         **time_of_day,
         **traffic,
+        # build a singol dict with all the feature
     }
 
 
@@ -161,7 +171,7 @@ def works_check():
 
 @app.post("/predict", response_model=PredictResponse)
 async def predict_price(request: PredictRequest) -> PredictResponse:
-    
+
     # Geocode
     
     pickup_lat, pickup_lon = await geocode_address(request.pickup_address) 
@@ -186,7 +196,11 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
     elif request.weather == "Snow":
         weather_features["Weather_Snow"] = 1
     
-    # Rates
+    # --- Pricing rate assumptions (design choice) ---
+    # The ML model was trained using these pricing-related features:
+    # Base_Fare, Per_Km_Rate, and Per_Minute_Rate.
+    # In a real taxi system, these rates may vary by provider, city, time, or policy.
+    # Since the user cannot know the exact tariff rates at request time, we set fixed
 
     base_fare = 3.0
     per_km_rate = 1.2
@@ -207,7 +221,8 @@ async def predict_price(request: PredictRequest) -> PredictResponse:
     }
 
     input_df = pd.DataFrame([model_input])
-    input_df = input_df.reindex(columns=FEATURE_COLUMNS, fill_value=0.0)
+    input_df = input_df.reindex(columns=FEATURE_COLUMNS, fill_value=0.0) 
+    
 
     # predict
     pred = model.predict(input_df)[0]

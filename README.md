@@ -1,4 +1,4 @@
-# taxi_prediction_fullstack_alessandro
+# Taxi_prediction_fullstack_alessandro
 Full-stack ML application for predicting taxi trip prices.
 
 ## Dataset and Data Directory
@@ -18,6 +18,14 @@ To provide a user-friendly experience, the application requires only:
 - Drop-off address (Point B)
 - Weather conditions (selected by the user)
 - Passenger count (selected by the user)
+
+### Pricing rate assumptions (Base Fare and Rates)
+The trained model expects three pricing-related inputs: `Base_Fare`, `Per_Km_Rate`, and `Per_Minute_Rate`.
+In a real-world taxi system, these rates may vary depending on provider, city, or pricing policy.
+
+For this student project, the application uses fixed default values for these rates to keep the user input minimal
+and remain consistent with the course scope. This means predictions are primarily driven by route distance and duration
+plus the encoded contextual features.
 
 ### Automatically derived features
 Some features are automatically derived at request time:
@@ -43,6 +51,14 @@ The effect of `Weather` on the predicted price is learned from the training data
 In the cleaned dataset, the number of observations for each category is not balanced (e.g., `Snow` has fewer samples than `Clear` and `Rain`).
 Additionally, in this dataset the mean/median `Trip_Price` for `Snow` is slightly lower than for `Clear` and `Rain`.
 For this reason, the model may predict similar or slightly lower prices under `Snow`, which reflects the patterns in the dataset rather than a real-world pricing rule.
+
+## Run `code`
+
+- backend
+uv run uvicorn taxipred.backend.api:app --reload
+
+- frontend
+uv run streamlit run src/taxipred/frontend/app.py
 
 ## Author
 
