@@ -1,9 +1,6 @@
 import httpx
 from fastapi import FastAPI , HTTPException
 
-
-
-
 # ----------- Function Geocoding   ---------
 # Out source 
 

@@ -104,12 +104,12 @@ with st.form("predict_form"):
                 st.write("Backend JSON:", result)
 
 
-# zoomable map (out source)
+# zoomable map 
 
             center_lat = (pickup_lat + dropoff_lat) / 2
             center_lon = (pickup_lon + dropoff_lon) / 2
 
-            taxi_map = folium.Map(location=[center_lat, center_lon], zoom_start=13) 
+            taxi_map = folium.Map(location=[center_lat, center_lon], zoom_start=13) # out sorce
                         
             folium.Marker(
                 location=[pickup_lat, pickup_lon],

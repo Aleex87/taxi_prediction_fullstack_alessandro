@@ -1,8 +1,5 @@
 from zoneinfo import ZoneInfo
-from typing import Literal
 from datetime import datetime
-
-
 
 # ----------- Timezone in Sweden  ---------
 TZ = ZoneInfo("Europe/Stockholm")
@@ -50,6 +47,6 @@ def now_time_features(now: datetime) -> dict:
         "Day_of_Week_Weekend": is_weekend,
         **time_of_day,
         **traffic,
-        # build a singol dict with all the feature
+        
     }
 

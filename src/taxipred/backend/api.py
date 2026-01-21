@@ -7,10 +7,8 @@ from taxipred.utils.constants import MODELS_PATH, FEATURE_COLUMNS, USD_TO_SEK, C
 from taxipred.backend.services.routing import geocode_address, osrm_route_metrics
 from taxipred.backend.services.features import now_time_features
 
-
 import pandas as pd
 import joblib
-import httpx
 
 app = FastAPI(title=" Taxi Price Prediction API")
 
